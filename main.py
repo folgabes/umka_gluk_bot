@@ -1,5 +1,9 @@
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import (
+    InlineKeyboardMarkup, InlineKeyboardButton,
+    ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
+    CallbackQuery
+)
 import json
 import os
 
@@ -9,7 +13,9 @@ dp = Dispatcher(bot)
 
 CHANNEL_USERNAME = "@merkulyevy_live_evolution_space"
 DATA_FILE = "data.json"
-ADMIN_ID = 123456789  # замени на свой Telegram ID
+
+# 👥 админы (подставь реальные id)
+ADMINS = [298580997, 267825213]
 
 # ---------------- УРОКИ ----------------
 lessons = {
@@ -66,12 +72,29 @@ async def check_subscription(user_id):
     except:
         return False
 
-# ---------------- КОМАНДЫ ----------------
+# ---------------- СПРАВОЧНЫЕ ОПЦИИ ----------------
+gender_options = ["Мужчина", "Женщина"]
+age_options = ["до 20", "20-30", "31-45", "46-60", "больше 60"]
+work_options = ["Предприниматель", "Свой бизнес", "Фрилансер",
+                "Руководитель в найме", "Сотрудник в найме", "Не работаю по разным причинам"]
+
+# ---------------- КНОПКА СТАРТ ----------------
+start_kb = ReplyKeyboardMarkup(resize_keyboard=True)
+start_kb.add(KeyboardButton("🚀 Старт"))
+
 @dp.message_handler(commands=["start"])
 async def start_cmd(message: types.Message):
-    update_user_data(message.from_user.id, {"step": "ask_name"})
-    await message.answer("👋 Привет! Это бот для мини-курса *Глюки про деньги*.\n\nКак тебя зовут?")
+    await message.answer(
+        "👋 Привет! Это бот для мини-курса *Глюки про деньги*.\n\nНажми кнопку, чтобы начать:",
+        reply_markup=start_kb
+    )
 
+@dp.message_handler(lambda message: message.text == "🚀 Старт")
+async def handle_start_button(message: types.Message):
+    update_user_data(message.from_user.id, {"step": "ask_name"})
+    await message.answer("Как тебя зовут?", reply_markup=ReplyKeyboardRemove())
+
+# ---------------- КОМАНДЫ ----------------
 @dp.message_handler(commands=["reset"])
 async def reset_cmd(message: types.Message):
     data = load_data()
@@ -79,11 +102,11 @@ async def reset_cmd(message: types.Message):
     if user_id in data:
         del data[user_id]
         save_data(data)
-    await message.answer("Прогресс обнулён. Напиши /start, чтобы начать заново.")
+    await message.answer("Прогресс обнулён. Нажми 🚀 Старт, чтобы начать заново.", reply_markup=start_kb)
 
 @dp.message_handler(commands=["help"])
 async def help_cmd(message: types.Message):
-    await bot.send_message(ADMIN_ID, f"🆘 Помощь от @{message.from_user.username} ({message.from_user.id})")
+    await bot.send_message(ADMINS[0], f"🆘 Помощь от @{message.from_user.username} ({message.from_user.id})")
     await message.answer("Запрос отправлен куратору. Мы скоро свяжемся с тобой.")
 
 @dp.message_handler(commands=["answers"])
@@ -102,6 +125,21 @@ async def answers_cmd(message: types.Message):
 
     await message.answer(text)
 
+@dp.message_handler(commands=["myid"])
+async def send_id(message: types.Message):
+    await message.answer(f"👤 Твой Telegram ID: {message.from_user.id}")
+
+@dp.message_handler(commands=["export"])
+async def export_cmd(message: types.Message):
+    if message.from_user.id not in ADMINS:
+        await message.answer("⛔ Эта команда только для администраторов.")
+        return
+    try:
+        with open(DATA_FILE, "rb") as f:
+            await message.answer_document(f)
+    except FileNotFoundError:
+        await message.answer("📂 Файл с данными пока не создан.")
+
 # ---------------- АНКЕТА ----------------
 @dp.message_handler()
 async def handle_message(message: types.Message):
@@ -110,11 +148,7 @@ async def handle_message(message: types.Message):
     step = user_data.get("step", "ask_name")
 
     if step == "ask_name":
-        update_user_data(user_id, {"name": message.text.strip(), "step": "ask_work"})
-        await message.answer("Напиши, пожалуйста, где ты работаешь и кем.")
-
-    elif step == "ask_work":
-        update_user_data(user_id, {"work": message.text.strip(), "step": "ask_contact"})
+        update_user_data(user_id, {"name": message.text.strip(), "step": "ask_contact"})
         await message.answer("Оставь контакт: телефон или ник в Telegram.")
 
     elif step == "ask_contact":
@@ -122,27 +156,57 @@ async def handle_message(message: types.Message):
         await message.answer("И последнее — твой email:")
 
     elif step == "ask_email":
-        update_user_data(user_id, {"email": message.text.strip(), "step": "waiting_subscription"})
+        update_user_data(user_id, {"email": message.text.strip(), "step": "ask_gender"})
         keyboard = InlineKeyboardMarkup()
-        keyboard.add(InlineKeyboardButton("🔔 Подписаться на канал", url="https://t.me/merkulyevy_live_evolution_space"))
-        keyboard.add(InlineKeyboardButton("✅ Я подписался", callback_data="check_subscription"))
-        await message.answer(
-            "⚠️ Чтобы пройти курс, нужно быть подписанным на наш канал.\n\nПодпишись и нажми «Я подписался».",
-            reply_markup=keyboard
-        )
+        for g in gender_options:
+            keyboard.add(InlineKeyboardButton(g, callback_data=f"gender:{g}"))
+        await message.answer("Прежде чем начать, напиши пару слов о себе.\n\nТы мужчина или женщина?", reply_markup=keyboard)
 
     elif step == "lesson":
         current = user_data.get("current", 1)
         if current > len(lessons):
             await message.answer("Курс завершён 🎉\n\nНапиши /answers, чтобы посмотреть свои ответы.")
             return
-        # сохраняем ответ
         answers = user_data.get("answers", {})
         answers[str(current)] = message.text.strip()
         update_user_data(user_id, {"answers": answers, "current": current + 1})
         await send_lesson(user_id, current + 1)
 
 # ---------------- CALLBACK ----------------
+@dp.callback_query_handler(lambda c: c.data.startswith("gender:"))
+async def process_gender(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    gender = callback_query.data.split(":", 1)[1]
+    update_user_data(user_id, {"gender": gender, "step": "ask_age"})
+    keyboard = InlineKeyboardMarkup()
+    for a in age_options:
+        keyboard.add(InlineKeyboardButton(a, callback_data=f"age:{a}"))
+    await bot.send_message(user_id, "Выбери свой возраст:", reply_markup=keyboard)
+
+@dp.callback_query_handler(lambda c: c.data.startswith("age:"))
+async def process_age(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    age = callback_query.data.split(":", 1)[1]
+    update_user_data(user_id, {"age": age, "step": "ask_work_area"})
+    keyboard = InlineKeyboardMarkup()
+    for w in work_options:
+        keyboard.add(InlineKeyboardButton(w, callback_data=f"work:{w}"))
+    await bot.send_message(user_id, "Выбери свою сферу деятельности:", reply_markup=keyboard)
+
+@dp.callback_query_handler(lambda c: c.data.startswith("work:"))
+async def process_work(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    work = callback_query.data.split(":", 1)[1]
+    update_user_data(user_id, {"work_area": work, "step": "waiting_subscription"})
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("🔔 Подписаться на канал", url="https://t.me/merkulyevy_live_evolution_space"))
+    keyboard.add(InlineKeyboardButton("✅ Я подписался", callback_data="check_subscription"))
+    await bot.send_message(
+        user_id,
+        "⚠️ Чтобы пройти курс, нужно быть подписанным на наш канал.\n\nПодпишись и нажми «Я подписался».",
+        reply_markup=keyboard
+    )
+
 @dp.callback_query_handler(lambda c: c.data == "check_subscription")
 async def process_subscription(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
