@@ -1,334 +1,198 @@
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+import json
 import os
-import io
-import csv
-import asyncpg
-from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
 
-# ---------- config ----------
 API_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_USERNAME = "@merkulyevy_live_evolution_space"
-
-# админы: можно задать переменной окружения ADMIN_IDS="123,456" или править список ниже
-ADMIN_IDS = [
-    int(x) for x in (os.getenv("ADMIN_IDS", "").split(",") if os.getenv("ADMIN_IDS") else [])
-] or [111111111, 222222222]  # <-- замените на ваши реальные id
-
-bot = Bot(token=API_TOKEN)
+bot = Bot(token=API_TOKEN, parse_mode="Markdown")
 dp = Dispatcher(bot)
 
-pool: asyncpg.Pool = None  # postgres pool
+CHANNEL_USERNAME = "@merkulyevy_live_evolution_space"
+DATA_FILE = "data.json"
+ADMIN_ID = 123456789  # замени на свой Telegram ID
 
-# ---------- lessons ----------
+# ---------------- УРОКИ ----------------
 lessons = {
     1: {
         "question": "Вспомни, пожалуйста, какие преодолённые тобой трудности укрепили твоё здоровье и помогли обрести внутреннюю силу и спокойствие?",
-        "text": (
-            "📽 Урок 1. Здоровье можно поменять на деньги\n\n"
-            "Посмотри видео:\n"
-            "🔗 Rutube: https://rutube.ru/video/private/438c67c0e3510477ba92ef1c9cbda807/?p=m8ZK3IF63nq3U8aiuKBfyQ\n"
-            "🔗 YouTube: https://youtube.com/shorts/_uTHQopErp4\n\n"
-            "— — —\n\n"
-            "📝 Задание:\n"
-            "Вспомни, пожалуйста, какие преодолённые тобой трудности укрепили твоё здоровье и помогли обрести внутреннюю силу и спокойствие?"
-        ),
+        "text": "📽 Урок 1. Здоровье можно поменять на деньги\n\nПосмотри видео:\n\n🔗 [Rutube](https://rutube.ru/video/private/438c67c0e3510477ba92ef1c9cbda807/?p=m8ZK3IF63nq3U8aiuKBfyQ)\n🔗 [YouTube](https://youtube.com/shorts/_uTHQopErp4)\n\n---\n\n📝 Задание:\n\nВспомни, пожалуйста, какие преодолённые тобой трудности укрепили твоё здоровье и помогли обрести внутреннюю силу и спокойствие?",
     },
     2: {
         "question": "Расскажи о моментах в своей жизни, когда деньги принесли тебе настоящее счастье и радость. Были ли эпизоды, когда обладание ими стало источником огорчений и переживаний?",
-        "text": (
-            "📽 Урок 2. Деньги могут спасти от старости и смерти\n\n"
-            "Посмотри видео:\n"
-            "🔗 Rutube: https://rutube.ru/video/private/a455fedbc14d98eeac76e09dec70aaa8/?p=O-rFwwAB4tvSNHOJK5gDgw\n"
-            "🔗 YouTube: https://youtube.com/shorts/6KOFfzMXeBo\n\n"
-            "— — —\n\n"
-            "📝 Задание:\n"
-            "Расскажи о моментах в своей жизни, когда деньги принесли тебе настоящее счастье и радость.\n"
-            "Были ли эпизоды, когда обладание ими стало источником огорчений и переживаний?"
-        ),
+        "text": "📽 Урок 2. Деньги могут спасти от старости и смерти\n\nПосмотри видео:\n\n🔗 [Rutube](https://rutube.ru/video/private/a455fedbc14d98eeac76e09dec70aaa8/?p=O-rFwwAB4tvSNHOJK5gDgw)\n🔗 [YouTube](https://youtube.com/shorts/6KOFfzMXeBo)\n\n---\n\n📝 Задание:\n\nРасскажи о моментах в своей жизни, когда деньги принесли тебе настоящее счастье и радость.\n\nБыли ли эпизоды, когда обладание ими стало источником огорчений и переживаний?",
     },
     3: {
         "question": "Поделись историей о том, как ты распорядился(ась) случайно обретёнными средствами. Какой полезный вывод ты сделал(а) из этого опыта?",
-        "text": (
-            "📽 Урок 3. Легкие деньги легко даются\n\n"
-            "Посмотри видео:\n"
-            "🔗 Rutube: https://rutube.ru/video/private/ad9e2b3c210d21cd23712045627dab40/?p=Ib29o4dCFybWBwITaw8EcA\n"
-            "🔗 YouTube: https://youtube.com/shorts/nzpJTNZseH8\n\n"
-            "— — —\n\n"
-            "📝 Задание:\n"
-            "Поделись историей о том, как ты распорядился(ась) случайно обретёнными средствами.\n"
-            "Какой полезный вывод ты сделал(а) из этого опыта?"
-        ),
+        "text": "📽 Урок 3. Легкие деньги легко даются\n\nПосмотри видео:\n\n🔗 [Rutube](https://rutube.ru/video/private/ad9e2b3c210d21cd23712045627dab40/?p=Ib29o4dCFybWBwITaw8EcA)\n🔗 [YouTube](https://youtube.com/shorts/nzpJTNZseH8?feature=share)\n\n---\n\n📝 Задание:\n\nПоделись историей о том, как ты распорядился(ась) случайно обретёнными средствами.\n\nКакой полезный вывод ты сделал(а) из этого опыта?",
     },
     4: {
         "question": "Какие действия, на твой взгляд, уберегут тебя от потери денег и помогут защитить средства при хранении?",
-        "text": (
-            "📽 Урок 4. Деньги можно сохранить без риска потерять\n\n"
-            "Посмотри видео:\n"
-            "🔗 Rutube: https://rutube.ru/video/private/17cda71a3427edf4f8210bff14862bcd/?p=mC_3osWPMwJgbZ1mICPjOQ\n"
-            "🔗 YouTube: https://youtube.com/shorts/nzpJTNZseH8\n\n"
-            "— — —\n\n"
-            "📝 Задание:\n"
-            "Какие действия, на твой взгляд, уберегут тебя от потери денег и помогут защитить средства при хранении?"
-        ),
+        "text": "📽 Урок 4. Деньги можно сохранить без риска потерять\n\nПосмотри видео:\n\n🔗 [Rutube](https://rutube.ru/video/private/17cda71a3427edf4f8210bff14862bcd/?p=mC_3osWPMwJgbZ1mICPjOQ)\n🔗 [YouTube](https://youtube.com/shorts/nzpJTNZseH8?feature=share)\n\n---\n\n📝 Задание:\n\nКакие действия, на твой взгляд, уберегут тебя от потери денег и помогут защитить средства при хранении?",
     },
     5: {
         "question": "Какие ценности и возможности остаются доступными человеку, если у него временно отсутствуют деньги?",
-        "text": (
-            "📽 Урок 5. Купи сейчас, заплатишь потом\n\n"
-            "Посмотри видео:\n"
-            "🔗 Rutube: https://rutube.ru/video/private/c190ba709164a4e7fe3f0c6be9ffd5d9/?p=OSf95L2cKiR_FfNmC9xzrg\n"
-            "🔗 YouTube: https://youtube.com/shorts/wkbbH1NzmdY\n\n"
-            "— — —\n\n"
-            "📝 Задание:\n"
-            "Какие ценности и возможности остаются доступными человеку, если у него временно отсутствуют деньги?"
-        ),
+        "text": "📽 Урок 5. Купи сейчас, заплатишь потом\n\nПосмотри видео:\n\n🔗 [Rutube](https://rutube.ru/video/private/c190ba709164a4e7fe3f0c6be9ffd5d9/?p=OSf95L2cKiR_FfNmC9xzrg)\n🔗 [YouTube](https://youtube.com/shorts/wkbbH1NzmdY)\n\n---\n\n📝 Задание:\n\nКакие ценности и возможности остаются доступными человеку, если у него временно отсутствуют деньги?",
     },
 }
 
-# ---------- DB helpers ----------
-async def init_db():
-    async with pool.acquire() as conn:
-        await conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id        BIGINT PRIMARY KEY,
-            name      TEXT,
-            email     TEXT,
-            gender    TEXT,
-            age_group TEXT,
-            work_area TEXT,
-            step      TEXT NOT NULL DEFAULT 'start',
-            current   INT  NOT NULL DEFAULT 1
-        );
-        """)
-        await conn.execute("""
-        CREATE TABLE IF NOT EXISTS answers (
-            user_id    BIGINT REFERENCES users(id) ON DELETE CASCADE,
-            lesson_num INT,
-            answer     TEXT,
-            PRIMARY KEY (user_id, lesson_num)
-        );
-        """)
+# ---------------- ДАННЫЕ ----------------
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
 
-async def get_user(user_id: int) -> dict:
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT * FROM users WHERE id=$1", user_id)
-        if not row:
-            await conn.execute(
-                "INSERT INTO users(id) VALUES($1) ON CONFLICT DO NOTHING", user_id
-            )
-            row = await conn.fetchrow("SELECT * FROM users WHERE id=$1", user_id)
-        return dict(row)
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-async def update_user(user_id: int, **fields):
-    if not fields:
-        return
-    cols, vals = [], []
-    for i, (k, v) in enumerate(fields.items(), start=1):
-        cols.append(f"{k} = ${i}")
-        vals.append(v)
-    vals.append(user_id)
-    sql = f"UPDATE users SET {', '.join(cols)} WHERE id = ${len(vals)}"
-    async with pool.acquire() as conn:
-        await conn.execute(sql, *vals)
+def get_user_data(user_id):
+    data = load_data()
+    user_id = str(user_id)
+    return data.get(user_id, {"step": "ask_name", "answers": {}, "current": 1})
 
-async def save_answer(user_id: int, lesson_num: int, answer: str):
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO answers(user_id, lesson_num, answer)
-            VALUES($1,$2,$3)
-            ON CONFLICT (user_id, lesson_num) DO UPDATE SET answer=EXCLUDED.answer
-            """,
-            user_id, lesson_num, answer
-        )
+def update_user_data(user_id, new_data):
+    data = load_data()
+    user_id = str(user_id)
+    if user_id not in data:
+        data[user_id] = {"step": "ask_name", "answers": {}, "current": 1}
+    data[user_id].update(new_data)
+    save_data(data)
 
-async def get_answers(user_id: int) -> dict:
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT lesson_num, answer FROM answers WHERE user_id=$1 ORDER BY lesson_num", user_id
-        )
-        return {str(r["lesson_num"]): r["answer"] for r in rows}
-
-async def reset_user(user_id: int):
-    async with pool.acquire() as conn:
-        await conn.execute("DELETE FROM answers WHERE user_id=$1", user_id)
-        await conn.execute("UPDATE users SET step='start', current=1 WHERE id=$1", user_id)
-
-# ---------- utils ----------
-async def check_subscription(user_id: int) -> bool:
+async def check_subscription(user_id):
     try:
-        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in ("member", "administrator", "creator")
-    except Exception:
+        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except:
         return False
 
-def start_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add(types.KeyboardButton("Начать"))
-    return kb
+# ---------------- СПРАВОЧНЫЕ ОПЦИИ ----------------
+gender_options = ["Мужчина", "Женщина"]
+age_options = ["до 20", "20-30", "31-45", "46-60", "больше 60"]
+work_options = ["Предприниматель", "Свой бизнес", "Фрилансер",
+                "Руководитель в найме", "Сотрудник в найме", "Не работаю по разным причинам"]
 
-def gender_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add("Мужчина", "Женщина")
-    return kb
-
-def age_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add("до 20", "20-30", "31-45", "46-60", "больше 60")
-    return kb
-
-def work_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.row("предприниматель", "свой бизнес", "фрилансер")
-    kb.row("руководитель в найме", "сотрудник в найме", "не работаю")
-    return kb
-
-def done_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add("Готово")
-    return kb
-
-# ---------- handlers ----------
+# ---------------- КОМАНДЫ ----------------
 @dp.message_handler(commands=["start"])
-async def cmd_start(m: types.Message):
-    user = await get_user(m.from_user.id)
-    if user["step"] == "start":
-        await m.answer("привет! 👋 я бот курса «глюки про деньги». нажми кнопку, чтобы начать.", reply_markup=start_kb())
-    else:
-        # продолжим с того места, где человек остановился
-        await continue_flow(m, user)
+async def start_cmd(message: types.Message):
+    update_user_data(message.from_user.id, {"step": "ask_name"})
+    await message.answer("👋 Привет! Это бот для мини-курса *Глюки про деньги*.\n\nКак тебя зовут?")
 
 @dp.message_handler(commands=["reset"])
-async def cmd_reset(m: types.Message):
-    await reset_user(m.from_user.id)
-    await m.answer("ок, всё обнулила. жми «Начать».", reply_markup=start_kb())
+async def reset_cmd(message: types.Message):
+    data = load_data()
+    user_id = str(message.from_user.id)
+    if user_id in data:
+        del data[user_id]
+        save_data(data)
+    await message.answer("Прогресс обнулён. Напиши /start, чтобы начать заново.")
+
+@dp.message_handler(commands=["help"])
+async def help_cmd(message: types.Message):
+    await bot.send_message(ADMIN_ID, f"🆘 Помощь от @{message.from_user.username} ({message.from_user.id})")
+    await message.answer("Запрос отправлен куратору. Мы скоро свяжемся с тобой.")
 
 @dp.message_handler(commands=["answers"])
-async def cmd_answers(m: types.Message):
-    answers = await get_answers(m.from_user.id)
+async def answers_cmd(message: types.Message):
+    user_data = get_user_data(message.from_user.id)
+    answers = user_data.get("answers", {})
     if not answers:
-        await m.answer("пока нет сохранённых ответов ✍️")
+        await message.answer("У тебя пока нет сохранённых ответов ✍️")
         return
-    text = "📒 твои ответы по курсу:\n\n"
+
+    text = "📒 Твои ответы по курсу:\n\n"
     for num in sorted(answers, key=lambda x: int(x)):
-        q = lessons[int(num)]["question"]
-        text += f"📽 урок {num}. {q}\nответ: {answers[num]}\n\n"
-    await m.answer(text)
+        question = lessons[int(num)]["question"]
+        answer = answers[num]
+        text += f"📽 Урок {num}. {question}\nОтвет: {answer}\n\n"
 
-@dp.message_handler(commands=["export"])
-async def cmd_export(m: types.Message):
-    if m.from_user.id not in ADMIN_IDS:
-        await m.answer("⛔ доступ только для админов.")
-        return
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT u.id, u.name, u.email, u.gender, u.age_group, u.work_area, a.lesson_num, a.answer
-            FROM users u
-            LEFT JOIN answers a ON a.user_id = u.id
-            ORDER BY u.id, a.lesson_num
-        """)
-    # делаем CSV
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(["user_id","name","email","gender","age","work_area","lesson","answer"])
-    for r in rows:
-        w.writerow([r["id"], r["name"], r["email"], r["gender"], r["age_group"], r["work_area"], r["lesson_num"], r["answer"]])
-    buf.seek(0)
-    await m.answer_document(types.InputFile(buf, filename="export.csv"))
+    await message.answer(text)
 
-@dp.message_handler(lambda m: m.text == "Начать")
-async def btn_start(m: types.Message):
-    await update_user(m.from_user.id, step="ask_name")
-    await m.answer("как тебя зовут?", reply_markup=types.ReplyKeyboardRemove())
-
+# ---------------- АНКЕТА ----------------
 @dp.message_handler()
-async def any_text(m: types.Message):
-    user = await get_user(m.from_user.id)
-    step = user["step"]
+async def handle_message(message: types.Message):
+    user_id = message.from_user.id
+    user_data = get_user_data(user_id)
+    step = user_data.get("step", "ask_name")
 
     if step == "ask_name":
-        await update_user(m.from_user.id, name=m.text.strip(), step="ask_email")
-        await m.answer("укажи свой email:")
+        update_user_data(user_id, {"name": message.text.strip(), "step": "ask_contact"})
+        await message.answer("Оставь контакт: телефон или ник в Telegram.")
+
+    elif step == "ask_contact":
+        update_user_data(user_id, {"contact": message.text.strip(), "step": "ask_email"})
+        await message.answer("И последнее — твой email:")
 
     elif step == "ask_email":
-        await update_user(m.from_user.id, email=m.text.strip(), step="ask_gender")
-        await m.answer("ты мужчина или женщина?", reply_markup=gender_kb())
-
-    elif step == "ask_gender":
-        await update_user(m.from_user.id, gender=m.text.strip(), step="ask_age")
-        await m.answer("твой возраст:", reply_markup=age_kb())
-
-    elif step == "ask_age":
-        await update_user(m.from_user.id, age_group=m.text.strip(), step="ask_work")
-        await m.answer("выбери сферу деятельности:", reply_markup=work_kb())
-
-    elif step == "ask_work":
-        await update_user(m.from_user.id, work_area=m.text.strip(), step="check_sub")
-        await m.answer(
-            "спасибо! теперь подпишись на канал:\n"
-            "https://t.me/merkulyevy_live_evolution_space\n\n"
-            "как подпишешься — жми «Готово».",
-            reply_markup=done_kb()
-        )
-
-    elif step == "check_sub":
-        if m.text == "Готово":
-            if await check_subscription(m.from_user.id):
-                await update_user(m.from_user.id, step="lesson", current=1)
-                await m.answer("подписка подтверждена ✨ начинаем курс!", reply_markup=types.ReplyKeyboardRemove())
-                await m.answer(lessons[1]["text"])
-            else:
-                await m.answer("я пока не вижу подписки 🤔 подпишись и нажми «Готово» ещё раз.")
-        else:
-            await m.answer("нажми «Готово», когда подпишешься 🙌")
+        update_user_data(user_id, {"email": message.text.strip(), "step": "ask_gender"})
+        keyboard = InlineKeyboardMarkup()
+        for g in gender_options:
+            keyboard.add(InlineKeyboardButton(g, callback_data=f"gender:{g}"))
+        await message.answer("Прежде чем начать, напиши пару слов о себе.\n\nТы мужчина или женщина?", reply_markup=keyboard)
 
     elif step == "lesson":
-        cur = user["current"]
-        await save_answer(m.from_user.id, cur, m.text.strip())
-        next_id = cur + 1
-        if next_id in lessons:
-            await update_user(m.from_user.id, current=next_id)
-            await m.answer(lessons[next_id]["text"])
-        else:
-            await update_user(m.from_user.id, step="done")
-            await m.answer("🎉 курс завершён! напиши /answers, чтобы посмотреть свои ответы.")
+        current = user_data.get("current", 1)
+        if current > len(lessons):
+            await message.answer("Курс завершён 🎉\n\nНапиши /answers, чтобы посмотреть свои ответы.")
+            return
+        answers = user_data.get("answers", {})
+        answers[str(current)] = message.text.strip()
+        update_user_data(user_id, {"answers": answers, "current": current + 1})
+        await send_lesson(user_id, current + 1)
 
-    elif step == "done":
-        await m.answer("курс уже пройден. можешь посмотреть /answers или /reset чтобы начать заново.")
+# ---------------- CALLBACK ----------------
+@dp.callback_query_handler(lambda c: c.data.startswith("gender:"))
+async def process_gender(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    gender = callback_query.data.split(":", 1)[1]
+    update_user_data(user_id, {"gender": gender, "step": "ask_age"})
+    keyboard = InlineKeyboardMarkup()
+    for a in age_options:
+        keyboard.add(InlineKeyboardButton(a, callback_data=f"age:{a}"))
+    await bot.send_message(user_id, "Выбери свой возраст:", reply_markup=keyboard)
 
-    else:
-        # если что-то непредвиденное — начнём сначала
-        await update_user(m.from_user.id, step="start")
-        await m.answer("давай начнём сначала 🙂", reply_markup=start_kb())
+@dp.callback_query_handler(lambda c: c.data.startswith("age:"))
+async def process_age(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    age = callback_query.data.split(":", 1)[1]
+    update_user_data(user_id, {"age": age, "step": "ask_work_area"})
+    keyboard = InlineKeyboardMarkup()
+    for w in work_options:
+        keyboard.add(InlineKeyboardButton(w, callback_data=f"work:{w}"))
+    await bot.send_message(user_id, "Выбери свою сферу деятельности:", reply_markup=keyboard)
 
-async def continue_flow(m: types.Message, user: dict):
-    """Если человек вернулся не с 'start' — продолжаем сценарий без лишних кнопок."""
-    step = user["step"]
-    prompts = {
-        "ask_name": "как тебя зовут?",
-        "ask_email": "укажи свой email:",
-        "ask_gender": "ты мужчина или женщина?",
-        "ask_age": "твой возраст:",
-        "ask_work": "выбери сферу деятельности:",
-        "check_sub": "подпишись на канал и нажми «Готово»: https://t.me/merkulyevy_live_evolution_space",
-        "lesson": lessons[user.get("current", 1)]["text"] if user.get("current", 1) in lessons else "продолжим?",
-        "done": "курс завершён. /answers покажет твои ответы.",
-    }
-    reply = prompts.get(step, "продолжим?")
-    await m.answer(reply)
-
-# ---------- startup ----------
-async def on_startup(_):
-    global pool
-    pool = await asyncpg.create_pool(
-        user=os.getenv("PGUSER"),
-        password=os.getenv("PGPASSWORD"),
-        database=os.getenv("PGDATABASE"),
-        host=os.getenv("PGHOST"),
-        port=os.getenv("PGPORT"),
-        min_size=1, max_size=5,
+@dp.callback_query_handler(lambda c: c.data.startswith("work:"))
+async def process_work(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    work = callback_query.data.split(":", 1)[1]
+    update_user_data(user_id, {"work_area": work, "step": "waiting_subscription"})
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("🔔 Подписаться на канал", url="https://t.me/merkulyevy_live_evolution_space"))
+    keyboard.add(InlineKeyboardButton("✅ Я подписался", callback_data="check_subscription"))
+    await bot.send_message(
+        user_id,
+        "⚠️ Чтобы пройти курс, нужно быть подписанным на наш канал.\n\nПодпишись и нажми «Я подписался».",
+        reply_markup=keyboard
     )
-    await init_db()
 
+@dp.callback_query_handler(lambda c: c.data == "check_subscription")
+async def process_subscription(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    if await check_subscription(user_id):
+        update_user_data(user_id, {"step": "lesson", "current": 1})
+        await bot.send_message(user_id, "Отлично, подписка подтверждена ✨ Начинаем курс!")
+        await send_lesson(user_id, 1)
+    else:
+        await bot.send_message(user_id, "Пока не вижу подписки 🤔 Проверь ещё раз и нажми «Я подписался».")
+
+# ---------------- УРОКИ ----------------
+async def send_lesson(user_id, lesson_id):
+    lesson = lessons.get(lesson_id)
+    if lesson:
+        await bot.send_message(user_id, lesson["text"])
+    else:
+        await bot.send_message(user_id, "Поздравляю, ты завершил(а) курс! 🎉\n\nНапиши /answers, чтобы посмотреть свои ответы.")
+
+# ---------------- ЗАПУСК ----------------
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+    executor.start_polling(dp, skip_updates=True)
