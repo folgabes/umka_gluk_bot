@@ -9,8 +9,8 @@ dp = Dispatcher(bot)
 
 CHANNEL_USERNAME = "@merkulyevy_live_evolution_space"
 
-# список айдишников админов
-ADMINS = [123456789, 987654321]  # сюда вставь свои реальные id
+# список айдишников админов (вставь свои)
+ADMINS = [123456789, 987654321]
 
 # ---------- Postgres ----------
 
@@ -76,6 +76,15 @@ async def update_user(user_id, **kwargs):
             )
     await conn.close()
 
+# ---------- Проверка подписки ----------
+
+async def check_subscription(user_id):
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except:
+        return False
+
 # ---------- Экспорт ----------
 
 @dp.message_handler(commands=["export"])
@@ -97,14 +106,18 @@ async def export_data(message: types.Message):
     data = [dict(r) for r in rows]
     text = json.dumps(data, ensure_ascii=False, indent=2)
 
-    # отправляем как файл
-    file = types.InputFile.from_buffer(
-        text.encode("utf-8"), filename="export.json"
-    )
+    file = types.InputFile.from_buffer(text.encode("utf-8"), filename="export.json")
     await message.answer_document(file, caption="📤 Данные выгружены")
 
-# ---------- Остальное (уроки, логика и т.д.) ----------
-# ... тут у тебя остаётся то, что мы писали выше
+# ---------- Пример хэндлера start ----------
+
+@dp.message_handler(commands=["start"])
+async def send_welcome(message: types.Message):
+    await init_db()  # создаём таблицу, если её нет
+    await get_user(message.from_user.id)  # создаём запись для пользователя
+    await message.answer("Привет! 👋 Я бот для курса. Давай начнём!")
+
+# ---------- Запуск ----------
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
